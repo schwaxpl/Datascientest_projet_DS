@@ -15,7 +15,7 @@ def import_from_csv(file_path):
 st.title("Export/Import DataFrame")
 if 'reviews_df'  in st.session_state:
 
-    csv = st.session_state.reviews_df.to_csv(index=False).encode('utf-8')
+    csv = st.session_state.reviews_df.to_csv(index=False, escapechar='\\').encode('utf-8')
     st.download_button(
         label="Exporter les données sous forme de CSV",
         data=csv,
@@ -26,5 +26,5 @@ if 'reviews_df'  in st.session_state:
 
 uploaded_file = st.file_uploader("Envoyer un CSV", type="csv")
 if uploaded_file is not None:
-    st.session_state.reviews_df = pd.read_csv(uploaded_file)
+    st.session_state.reviews_df = pd.read_csv(uploaded_file, escapechar='\\')
     st.write(st.session_state.reviews_df)

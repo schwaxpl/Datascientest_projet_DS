@@ -5,6 +5,18 @@ import numpy as np
 
 
 if 'reviews_df' in st.session_state:
+    df = st.session_state.reviews_df.copy()
+    #TODO refaire à la source ou dans un onglet spécifique
+    for column in df.columns:
+        if column == 'Note':
+            df[column] = df[column].astype(int)
+    st.title("Dataset des avis")
+    grouped_df = df.groupby('Entreprise').agg({
+        'Note': ['mean', 'count'],
+        'Avis': 'count'
+    }).reset_index()
+    grouped_df.columns = ['Entreprise', 'Note Moyenne', 'Nombre de Notes', 'Nombre d\'Avis']
+    st.write(grouped_df)
     company_filter = st.selectbox("Filtrer par entreprise", options=["Toutes"] + list(st.session_state.reviews_df['Entreprise'].unique()))
     rating_filter = st.selectbox("Filtrer par note", options=["Toutes"] + list(st.session_state.reviews_df['Note'].unique()))
 

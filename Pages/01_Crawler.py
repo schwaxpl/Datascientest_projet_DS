@@ -78,8 +78,14 @@ def get_reviews(company_url):
             reply_text = reply_text_element.text.strip() if reply_text_element else "Pas de réponse"
         else:
             reply_text = "Pas de réponse"
-        
-        reviews.append({"Titre": title_text, "Note": rating, "Avis": review_text, "Auteur": author_name, "Réponse": reply_text})
+        date_element = card.find('time')
+        review_date = date_element['datetime'] if date_element else "Date inconnue"
+        verified_element = card.find('div', class_=lambda x: x and x.startswith('styles_reviewLabels'))
+        if verified_element and verified_element.find('span', text='Vérifié'):
+            verified = "Vérifié"
+        else:
+            verified = "Non vérifié"
+        reviews.append({"Titre": title_text, "Note": rating, "Avis": review_text, "Auteur": author_name, "Réponse": reply_text, "Date": review_date, "Vérifié": verified})
 
     
     return reviews
