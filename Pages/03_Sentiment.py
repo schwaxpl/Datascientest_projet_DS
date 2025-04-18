@@ -32,7 +32,8 @@ if 'reviews_df' in st.session_state:
     temp_df = st.session_state['reviews_df'].copy()
 
     # Apply sentiment analysis and theme extraction
+    temp_df = temp_df[temp_df['Avis'].notna() & (temp_df['Avis'].str.strip() != '')]
     temp_df['sentiment'] = temp_df['Avis'].apply(analyze_sentiment)
     temp_df['themes'] = temp_df['Avis'].apply(extract_themes)
 
-    st.write(temp_df)
+    st.dataframe(temp_df)

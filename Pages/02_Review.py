@@ -11,6 +11,7 @@ if 'reviews_df' in st.session_state:
         if column == 'Note':
             df[column] = df[column].astype(int)
     st.title("Dataset des avis")
+    st.text("Informations par entreprise")
     grouped_df = df.groupby('Entreprise').agg({
         'Note': ['mean', 'count'],
         'Avis': 'count'
@@ -31,7 +32,7 @@ if 'reviews_df' in st.session_state:
     st.write(filtered_df)
 
     if not filtered_df.empty:
-        all_reviews_text = ' '.join(filtered_df['Avis'])
+        all_reviews_text = ' '.join(filtered_df['Avis'].dropna())
         words = all_reviews_text.split()
         words = [word for word in words if len(word) > 4]
         word_counts = pd.Series(words).value_counts().head(10)

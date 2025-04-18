@@ -10,9 +10,7 @@ import matplotlib.pyplot as plt
 
 if 'reviews_df' in st.session_state:
     df = st.session_state.reviews_df.copy()
-    df['Réponse'] = df['Réponse'].replace(['nan', 'Pas de réponse'], None)
-    df['Avis'] = df['Avis'].replace(['nan', "Pas de texte d'avis"], None)
-    
+
     # Extraire les infos sous forme de DataFrame
     df_info = pd.DataFrame({
         "Colonnes": df.columns,
@@ -28,9 +26,7 @@ if 'reviews_df' in st.session_state:
 
         st.write("📊 Informations du DataFrame :")
         st.dataframe(df_info)
-        #TODO refaire à la source ou dans un onglet spécifique
-        df["Note"] = df["Note"].astype(int)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
         st.write("Informations sur les colonnes du DataFrame")
         for column in df.columns:
             with st.expander(f"Colonne: {column}"):
@@ -48,8 +44,12 @@ if 'reviews_df' in st.session_state:
 
     with tab2:
         with st.expander("Histogramme de la répartition des notes (vérifiés vs non vérifiés)"):
-            verified = df[df['Vérifié'] == "Vérifié"]
-            non_verified = df[df['Vérifié'] == "Non vérifié"]
+            if df['Vérifié'].dtype == bool:
+                verified = df[df['Vérifié'] == True]
+                non_verified = df[df['Vérifié'] == False]
+            else:
+                verified = df[df['Vérifié'] == "Vérifié"]
+                non_verified = df[df['Vérifié'] == "Non vérifié"]
 
             hist_values_verified = np.histogram(verified['Note'], bins=5, range=(1, 6))[0]
             hist_values_non_verified = np.histogram(non_verified['Note'], bins=5, range=(1, 6))[0]
@@ -98,7 +98,7 @@ if 'reviews_df' in st.session_state:
             st.write("On peut constater une légère tendance à ce que les avis plus longs aient tendance à donner des notes moins élevées. Ce qui semble logique vu que les gens insatisfaits ont plus de choses à dire et de motivation à détailler leur avis.")
         
         with st.expander("Taux de réponse aux avis et note moyenne par entreprise"):
-            response_rate = df['Réponse'].notnull().groupby(df['Entreprise']).mean()
+            response_rate = df['Réponse'].apply(lambda x: not pd.isnull(x) and x != "Pas de réponse").groupby(df['Entreprise']).mean()
             average_rating = df.groupby('Entreprise')['Note'].mean()
 
             fig, ax1 = plt.subplots()
@@ -166,6 +166,7 @@ if 'reviews_df' in st.session_state:
             st.pyplot(plt)
 
             st.write("La tendance montre effectivement une croissance, rendant d'autant plus intéressante notre solution puisque plus on a d'avis, plus cela nécessite de travail de réponse.")
+            #TODO: Analyse du nombre d'avis par entreprise
         with st.expander("Nuage de mots des mots les plus fréquents par note"):
             nltk.download('stopwords')
             stop_words = set(stopwords.words('french'))
