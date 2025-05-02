@@ -15,6 +15,8 @@ import seaborn as sns
 import shap
 
 from sklearn.metrics import classification_report   
+import pickle
+import io
 # Vectorization
 @st.cache_data
 def vectorize_tfidf(df):
@@ -49,9 +51,9 @@ else:
         patience=5,
         restore_best_weights=True
     )
-
+    f1_tfidf,f1, accuracy_tfidf, accuracy = 0,0,0,0
     # Train a first model using TF-IDF features
-    tab1, tab2 = st.tabs(["Model with TF-IDF Features", "Model with Embedding Features"])
+    tab1, tab2, tab3 = st.tabs(["Modèle avec des caractéristiques TF-IDF", "Modèle avec des caractéristiques d'embedding", "Conclusion"])
     
     with tab1:
 
@@ -76,34 +78,34 @@ else:
 
         # Evaluate
         loss_tfidf, accuracy_tfidf = model_tfidf.evaluate(X_test_tfidf, y_test, verbose=0)
-        st.write(f"TF-IDF Test Loss: {loss_tfidf:.4f}")
-        st.write(f"TF-IDF Test Accuracy: {accuracy_tfidf:.4f}")
+        st.write(f"Perte sur le test TF-IDF : {loss_tfidf:.4f}")
+        st.write(f"Précision sur le test TF-IDF : {accuracy_tfidf:.4f}")
 
         # F1 Score
         y_pred_tfidf = model_tfidf.predict(X_test_tfidf)
         y_pred_classes_tfidf = np.argmax(y_pred_tfidf, axis=1)
         f1_tfidf = f1_score(y_test, y_pred_classes_tfidf, average='weighted')
-        st.write(f"TF-IDF F1 Score: {f1_tfidf:.4f}")
+        st.write(f"Score F1 TF-IDF : {f1_tfidf:.4f}")
 
         # Classification Report
-        st.write("TF-IDF Classification Report:")
+        st.write("Rapport de classification TF-IDF :")
         report_tfidf = classification_report(y_test, y_pred_classes_tfidf, target_names=label_encoder.classes_)
         st.text(report_tfidf)
 
         # Plot training history
         fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-        ax[0].plot(history_tfidf.history['accuracy'], label='Train Accuracy')
-        ax[0].plot(history_tfidf.history['val_accuracy'], label='Validation Accuracy')
-        ax[0].set_title('TF-IDF Model Accuracy')
-        ax[0].set_ylabel('Accuracy')
-        ax[0].set_xlabel('Epoch')
+        ax[0].plot(history_tfidf.history['accuracy'], label='Précision sur l\'entraînement')
+        ax[0].plot(history_tfidf.history['val_accuracy'], label='Précision sur la validation')
+        ax[0].set_title('Précision du modèle TF-IDF')
+        ax[0].set_ylabel('Précision')
+        ax[0].set_xlabel('Époque')
         ax[0].legend(loc='upper left')
 
-        ax[1].plot(history_tfidf.history['loss'], label='Train Loss')
-        ax[1].plot(history_tfidf.history['val_loss'], label='Validation Loss')
-        ax[1].set_title('TF-IDF Model Loss')
-        ax[1].set_ylabel('Loss')
-        ax[1].set_xlabel('Epoch')
+        ax[1].plot(history_tfidf.history['loss'], label='Perte sur l\'entraînement')
+        ax[1].plot(history_tfidf.history['val_loss'], label='Perte sur la validation')
+        ax[1].set_title('Perte du modèle TF-IDF')
+        ax[1].set_ylabel('Perte')
+        ax[1].set_xlabel('Époque')
         ax[1].legend(loc='upper left')
         st.pyplot(fig)
         
@@ -115,12 +117,28 @@ else:
         shap_values = explainer(X_test_tfidf[:3],max_evals=1000)
         # Plot the SHAP values for the first instance in the test data
         shap.initjs()
-        st.write("SHAP values for the first instance in the test data:") 
+        st.write("Valeurs SHAP pour la première instance des données de test :") 
         print(type(shap_values))
         print(shap_values.shape)
         fig, ax = plt.subplots()   
         shap.plots.waterfall(shap_values[0,:,0], max_display=20,show=False)
         st.pyplot(fig)
+
+        # Add a download button for the TF-IDF model
+
+        if st.button("Export TF-IDF Model"):
+            # Save the model to a bytes buffer
+            model_bytes = io.BytesIO()
+            pickle.dump(model_tfidf, model_bytes)
+            model_bytes.seek(0)
+            
+            # Create download button
+            st.download_button(
+                label="Download TF-IDF model",
+                data=model_bytes,
+                file_name="tfidf_model.pkl",
+                mime="application/octet-stream"
+            )
     with tab2:
         X = vectorize_embedding(df)
         # Split the data into training and testing sets
@@ -137,29 +155,25 @@ else:
         model.add(Dense(len(label_encoder.classes_), activation='softmax'))
 
 
-
-        # afficher la structure du modèle
-        model.summary(print_fn=lambda x: st.text(x))
-
-        # Compile the model
+        # Compiler le modèle
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-        # Train the model
+        # Entraîner le modèle
         history = model.fit(X_train, y_train, epochs=30,  validation_split=0.1, verbose=1,callbacks=[early_stopping])
 
-        # Evaluate the model
+        # Évaluer le modèle
         loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
-        st.write(f"Test Loss: {loss:.4f}")
-        st.write(f"Test Accuracy: {accuracy:.4f}")
+        st.write(f"Perte sur le test : {loss:.4f}")
+        st.write(f"Précision sur le test : {accuracy:.4f}")
         #f1 score   
 
 
         y_pred = model.predict(X_test)
         y_pred_classes = np.argmax(y_pred, axis=1)
         f1 = f1_score(y_test, y_pred_classes, average='weighted')
-        st.write(f"F1 Score: {f1:.4f}")
+        st.write(f"Score F1 : {f1:.4f}")
 
-        st.write("Classification Report:")
+        st.write("Rapport de classification :")
 
         report = classification_report(y_test, y_pred_classes, target_names=label_encoder.classes_)
         st.text(report)
@@ -167,26 +181,57 @@ else:
 
         sns.set_theme(style='whitegrid')
         fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-        ax[0].plot(history.history['accuracy'], label='Train Accuracy')
-        ax[0].plot(history.history['val_accuracy'], label='Validation Accuracy')
-        ax[0].set_title('Model Accuracy')
-        ax[0].set_ylabel('Accuracy')
-        ax[0].set_xlabel('Epoch')
+        ax[0].plot(history.history['accuracy'], label='Précision sur l\'entraînement')
+        ax[0].plot(history.history['val_accuracy'], label='Précision sur la validation')
+        ax[0].set_title('Précision du modèle')
+        ax[0].set_ylabel('Précision')
+        ax[0].set_xlabel('Époque')
         ax[0].legend(loc='upper left')
-        ax[1].plot(history.history['loss'], label='Train Loss')
-        ax[1].plot(history.history['val_loss'], label='Validation Loss')
-        ax[1].set_title('Model Loss')
-        ax[1].set_ylabel('Loss')
-        ax[1].set_xlabel('Epoch')
+        ax[1].plot(history.history['loss'], label='Perte sur l\'entraînement')
+        ax[1].plot(history.history['val_loss'], label='Perte sur la validation')
+        ax[1].set_title('Perte du modèle')
+        ax[1].set_ylabel('Perte')
+        ax[1].set_xlabel('Époque')
         ax[1].legend(loc='upper left')
-        # st.pyplot(fig)
-        # # explication des résultats avec shap
-        # explainer = shap.DeepExplainer(model, X_train[:5])
-        # shap_values = explainer.shap_values(X_test[5:10])
-        # shap.initjs()
-        # st.write("SHAP values for the first instance in the test data:")
-        # fig, ax = plt.subplots()
-        # shap.plots.waterfall(shap_values[0,:,0], max_display=10,show=False)
-        # st.pyplot(fig)
 
-   
+        # SHAP explanation for embedding model
+        st.write("Explication des résultats avec SHAP pour le modèle d'embedding")
+        
+        # Create a SHAP explainer using the model and the training data
+        explainer_embedding = shap.Explainer(model.predict, X_train[:40])
+        
+        # Calculate SHAP values for the test data
+        shap_values_embedding = explainer_embedding(X_test[:3], max_evals=5000)
+        
+        # Plot the SHAP values for the first instance in the test data
+        shap.initjs()
+        st.write("Valeurs SHAP pour la première instance des données de test (modèle d'embedding) :")
+        fig, ax = plt.subplots()
+        shap.plots.waterfall(shap_values_embedding[0, :, 0], max_display=20, show=False)
+        st.pyplot(fig)
+        # Add a download button for the embedding model
+        if st.button("Export Embedding Model"):
+            # Save the model to a bytes buffer
+            model_bytes = io.BytesIO()
+            pickle.dump(model, model_bytes)
+            model_bytes.seek(0)
+            
+            # Create download button
+            st.download_button(
+                label="Download Embedding model",
+                data=model_bytes,
+                file_name="embedding_model.pkl",
+                mime="application/octet-stream"
+            )
+    with tab3:
+        st.write("Comparaison des modèles")
+        results_df = pd.DataFrame({
+            'Model': ['TF-IDF', 'Embedding'],
+            'F1 Score': [f1_tfidf, f1],
+            'Accuracy': [accuracy_tfidf, accuracy]
+        })
+        st.dataframe(results_df)
+        st.text("Le modèle TF-IDF a montré de meilleures performances en termes de précision et de score F1 par rapport au modèle d'embedding.")
+        st.text("Les valeurs SHAP fournissent également des informations sur l'importance des caractéristiques pour chaque modèle.")
+        st.text("L'explication SHAP pour le modèle d'embedding est difficile à interpréter car elle nous ressort des \"features\" qui ne sont pas compréhensibles par l'homme.")
+        st.text("Il est donc préférable d'utiliser le modèle TF-IDF pour la prédiction des sentiments dans les avis Trustpilot.")
