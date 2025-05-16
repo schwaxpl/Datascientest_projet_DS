@@ -43,3 +43,32 @@ Laissez le programme faire ses calculs puis enregistrez les données.
 ## Modélisation
 
 Vous pouvez maintenant explorer les différentes pages de modélisation.
+
+## Utilisation
+
+Vous devez avoir un DF qui a déjà subi les étapes Preprocessing et Feature engineering en mémoire
+
+Importez un modèle pkl puis faites tourner la prédiction :)
+
+
+## Résultats TF-IDF 
+
+![Résultats TF-IDF](tf_idf.png)
+
+Shap :
+
+![Shap TF-IDF](shap_tf_idf.png)
+
+
+## Résultats Embeddings
+
+![Résultats Embeddings](embeddings.png)
+
+Shap :
+
+![Shap Embeddings](shap_embeddings.png)
+
+
+## Bonus utilisation llm :
+
+Dans la page présentation finale ( à alimenter avec votre token HF) vous pouvez générer des réponses à partir de Llama 3.1
