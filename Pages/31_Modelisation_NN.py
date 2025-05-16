@@ -13,7 +13,7 @@ from nltk.tokenize import word_tokenize
 import matplotlib.pyplot as plt
 import seaborn as sns
 import shap
-
+from transformers import AutoTokenizer
 from sklearn.metrics import classification_report   
 import pickle
 import io
@@ -22,6 +22,8 @@ import io
 def vectorize_tfidf(df):
     tfidf_vectorizer = TfidfVectorizer(max_df=0.3)
     X = tfidf_vectorizer.fit_transform(df['Mots_importants'])
+    with open('vectorizers/tfidf_vectorizer.pkl', 'wb') as f:
+        pickle.dump(tfidf_vectorizer, f)
     return pd.DataFrame(X.toarray(), columns=tfidf_vectorizer.get_feature_names_out())
 @st.cache_data
 def vectorize_embedding(df):
@@ -29,6 +31,8 @@ def vectorize_embedding(df):
     model = SentenceTransformer("dangvantuan/sentence-camembert-base")
     embeddings = df["tokens"].apply(lambda x: model.encode(" ".join(x), show_progress_bar=False))
     return np.array(embeddings.tolist())
+
+
 st.title("Modélisation en utilisant un réseau de neurones")
 
 if 'reviews_df' not in st.session_state:
@@ -58,7 +62,7 @@ else:
     with tab1:
 
         # Split TF-IDF data
-        X_train_tfidf, X_test_tfidf, y_train, y_test = train_test_split(X_tfidf, y, test_size=0.2, random_state=33)
+        X_train_tfidf, X_test_tfidf, y_train, y_test = train_test_split(X_tfidf, y, test_size=0.2, random_state=42)
 
         # Create and compile model
         model_tfidf = Sequential()
@@ -73,8 +77,12 @@ else:
         model_tfidf.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         # Train model
-        history_tfidf = model_tfidf.fit(X_train_tfidf, y_train, epochs=30, validation_split=0.1, 
-                                    verbose=1, callbacks=[early_stopping])
+        def train_tfidf_model(X_train, y_train):
+            history = model_tfidf.fit(X_train, y_train, epochs=30, validation_split=0.1, 
+                        verbose=1, callbacks=[early_stopping])
+            return history
+
+        history_tfidf = train_tfidf_model(X_train_tfidf, y_train)
 
         # Evaluate
         loss_tfidf, accuracy_tfidf = model_tfidf.evaluate(X_test_tfidf, y_test, verbose=0)
@@ -112,9 +120,12 @@ else:
         #explication des résultats avec shap
         
         # Create a SHAP explainer using the model and the training data
-        explainer = shap.Explainer(model_tfidf.predict, X_train_tfidf[:40])
-        # Calculate SHAP values for the test data
-        shap_values = explainer(X_test_tfidf[:3],max_evals=1000)
+        def calculate_shap_values(model_tfidf, X_train_tfidf, X_test_tfidf):
+            explainer = shap.Explainer(model_tfidf.predict, X_train_tfidf[:40])
+            shap_values = explainer(X_test_tfidf[:10], max_evals=2000)
+            return shap_values
+
+        shap_values = calculate_shap_values(model_tfidf, X_train_tfidf, X_test_tfidf)
         # Plot the SHAP values for the first instance in the test data
         shap.initjs()
         st.write("Valeurs SHAP pour la première instance des données de test :") 
@@ -126,23 +137,15 @@ else:
 
         # Add a download button for the TF-IDF model
 
-        if st.button("Export TF-IDF Model"):
-            # Save the model to a bytes buffer
-            model_bytes = io.BytesIO()
-            pickle.dump(model_tfidf, model_bytes)
-            model_bytes.seek(0)
-            
-            # Create download button
-            st.download_button(
-                label="Download TF-IDF model",
-                data=model_bytes,
-                file_name="tfidf_model.pkl",
-                mime="application/octet-stream"
-            )
+
+
+        # Save model to file 
+        with open('models/tf_idf_mdl.pkl', 'wb') as f:
+            pickle.dump(model_tfidf, f)
     with tab2:
         X = vectorize_embedding(df)
-        # Split the data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=33)
+        texts = df["Mots_importants"]
+        X_train, X_test, y_train, y_test, texts_train,texts_test = train_test_split(X, y,texts, test_size=0.2, random_state=33)
 
         # Define the model
         model = Sequential()
@@ -159,7 +162,12 @@ else:
         model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         # Entraîner le modèle
-        history = model.fit(X_train, y_train, epochs=30,  validation_split=0.1, verbose=1,callbacks=[early_stopping])
+        def train_embedding_model(X_train, y_train):
+            history = model.fit(X_train, y_train, epochs=30, validation_split=0.1, 
+                      verbose=1, callbacks=[early_stopping])
+            return history
+            
+        history = train_embedding_model(X_train, y_train)
 
         # Évaluer le modèle
         loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
@@ -196,33 +204,48 @@ else:
 
         # SHAP explanation for embedding model
         st.write("Explication des résultats avec SHAP pour le modèle d'embedding")
+
+        # Charge SentenceTransformer
+        embedding_model = SentenceTransformer("dangvantuan/sentence-camembert-base")
+
+        # Wrapper de prédiction prenant en entrée du texte brut
+        def predict_from_text(texts):
+            # Texte → Embeddings
+            X_embed = embedding_model.encode(texts)
+            # Embeddings → Prédictions via ton modèle Keras
+            return model.predict(X_embed)
+
+
+        def get_shap_values_for_text( texts_test):
+            tokenizer = AutoTokenizer.from_pretrained("dangvantuan/sentence-camembert-base")
+
+            # Utilise shap.maskers.Text pour permettre l'interprétation mot à mot
+            masker = shap.maskers.Text(tokenizer)
+            # Create explainer from raw text
+            explainer_text = shap.Explainer(predict_from_text, masker)
+            # Calculate SHAP values
+            shap_values_text = explainer_text(texts_test.tolist()[:10])
+            return shap_values_text
+
+        # Get SHAP values using the cached function
+        shap_values_text = get_shap_values_for_text(  texts_test)
+        # # Create a SHAP explainer using the model and the training data
+        # explainer_embedding = shap.Explainer(model.predict, X_train[:40])
         
-        # Create a SHAP explainer using the model and the training data
-        explainer_embedding = shap.Explainer(model.predict, X_train[:40])
+        # # Calculate SHAP values for the test data
+        # shap_values_embedding = explainer_embedding(X_test[:3], max_evals=5000)
         
-        # Calculate SHAP values for the test data
-        shap_values_embedding = explainer_embedding(X_test[:3], max_evals=5000)
-        
-        # Plot the SHAP values for the first instance in the test data
+        # # Plot the SHAP values for the first instance in the test data
         shap.initjs()
         st.write("Valeurs SHAP pour la première instance des données de test (modèle d'embedding) :")
         fig, ax = plt.subplots()
-        shap.plots.waterfall(shap_values_embedding[0, :, 0], max_display=20, show=False)
+        shap.plots.waterfall(shap_values_text[0, :, 0], max_display=20, show=False)
         st.pyplot(fig)
-        # Add a download button for the embedding model
-        if st.button("Export Embedding Model"):
-            # Save the model to a bytes buffer
-            model_bytes = io.BytesIO()
-            pickle.dump(model, model_bytes)
-            model_bytes.seek(0)
-            
-            # Create download button
-            st.download_button(
-                label="Download Embedding model",
-                data=model_bytes,
-                file_name="embedding_model.pkl",
-                mime="application/octet-stream"
-            )
+
+        
+        # Save model to file
+        with open('models/embedding_mdl.pkl', 'wb') as f:
+            pickle.dump(model, f)
     with tab3:
         st.write("Comparaison des modèles")
         results_df = pd.DataFrame({
