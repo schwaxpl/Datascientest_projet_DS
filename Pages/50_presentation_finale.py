@@ -32,27 +32,56 @@ if 'reviews_df' in st.session_state:
     st.dataframe(df)
 
     avis_id = st.text_input('Entrez l\'ID de l\'avis')
+
     if st.button('Proposer des réponses'):
         if avis_id:
-            avis_text = df.loc[int(avis_id), 'Avis']
-            if avis_text:
+            try:
+                avis_text = df.loc[int(avis_id), 'Avis']
+                if avis_text:
 
-                API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct"
-                headers = {"Authorization": f"Bearer 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"}
+                    API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-3.1-8B-Instruct"
+                    headers = {"Authorization": f"Bearer YOUR_HUGGINGFACE_API_KEY"} #remplacer par votre clé API Hugging Face
 
-                def query(payload):
-                    response = requests.post(API_URL, headers=headers, json=payload)
-                    return response.json()
+                    def query(payload):
+                        response = requests.post(API_URL, headers=headers, json=payload)
+                        response.raise_for_status()
+                        return response.json()
 
-                data = query({"inputs": avis_text, "parameters": {"max_length": 50, "num_return_sequences": 1}})
-                entreprise_name = df.loc[int(avis_id), 'Entreprise']
-                themes =["Formation","Formateur","Suivi","Plateforme"]
-                prompt = f"Tu es un assistant IA qui aide à répondre à des avis clients pour améliorer l'image et la confiance d'une entreprise. \n Utilisateur : Écrit moi une réponse à cet avis concernant l'entreprise {entreprise_name}, sachant que les thèmes importants à mettre en avant pour l'entreprise sont {themes}. Dans le cas où un ou plusieurs problèmes ne semblent pas être résolus, leur proposer de prendre contact à l'adresse \"contact@{entreprise_name}.com\". Tu seras pénalisé si tu ne réponds pas dans la langue de l'avis. Tu seras récompensé si ta réponse est rassurante, professionnelle et bienveillante. \n L'avis est le suivant : {avis_text} \n Réponse :"
-                st.write(f"Prompt envoyé : {prompt}")
-                data = query({"inputs": prompt, "parameters": {"max_length": 50, "max_new_tokens":2048, "num_return_sequences": 1,"temperature":0.7,"repetition_penalty":1.0}})
-                st.write('Proposition de réponse:')
-                st.write(data)
-            else:
-                st.write('ID d\'avis non trouvé ou avis vide.')
+                    entreprise_name = df.loc[int(avis_id), 'Entreprise']
+                    themes = ["Formation", "Formateur", "Suivi", "Plateforme"]
+
+                    prompt = (
+                        f"Tu es un assistant IA. Ta seule tâche est d'écrire une réponse professionnelle, bienveillante et rassurante à l'avis suivant. "
+                        f"Cette réponse représente l'entreprise {entreprise_name}, et doit mettre en valeur les thèmes clés suivants : {themes}. "
+                        f"Si l'avis contient des problèmes non résolus, invite poliment le client à contacter \"contact@{entreprise_name}.com\" pour un suivi. "
+                        f"Tu dois répondre dans la langue de l'avis. "
+                        f"N'écris qu'une seule réponse complète. N'ajoute aucune explication, commentaire ou autre contenu. Écris uniquement la réponse elle-même, comme si elle allait être directement envoyée au client."
+                        f"\n\nAvis : {avis_text}"
+                        f"\n\nRéponse :"
+                    )
+
+
+                    data = query({
+                        "inputs": prompt,
+                        "parameters": {
+                            "max_new_tokens": 200,
+                            "temperature": 0.7,
+                            "repetition_penalty": 1.0
+                        }
+                    })
+
+                    # ✅ Récupérer la réponse
+                    if isinstance(data, list) and "generated_text" in data[0]:
+                        generated = data[0]["generated_text"]
+                        generated = generated.split("Réponse :")[1].strip()
+                        st.write("Proposition de réponse :")
+                        st.write(generated)
+                    else:
+                        st.write("Erreur dans la réponse du modèle :", data)
+
+                else:
+                    st.warning("ID d'avis non trouvé ou avis vide.")
+            except Exception as e:
+                st.error(f"Erreur : {e}")
         else:
-            st.write('Veuillez entrer un ID d\'avis.')
+            st.warning("Veuillez entrer un ID d'avis.")

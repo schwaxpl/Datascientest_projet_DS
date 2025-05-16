@@ -170,7 +170,7 @@ with tab2:
         else:
             st.write("Veuillez entrer un nom d'entreprise.")
 
-if st.session_state.reviews_df.empty:
+if 'reviews_df' not in st.session_state or st.session_state.reviews_df.empty:
     st.write("Aucun avis à afficher pour le moment.")
 else:
     st.text("Les 1000 premiers avis:")
